@@ -636,6 +636,7 @@ async def simple_matrix(ctx, **kwargs):
 
 async def triple_matrix(ctx, **kwargs):
     k = kwargs["k"]
+    print(f" am I here?")
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
 
     # matrix_b = [[ctx.preproc.get_rand(ctx).v for _ in range(k)] for _ in range(k)]
@@ -696,9 +697,10 @@ if __name__ == "__main__":
         #     pp_elements.preprocessing_done()
         # else:
         #     loop.run_until_complete(pp_elements.wait_for_preprocessing())
-
+        print(f" before the loop")
         loop.run_until_complete(
             _run(HbmpcConfig.peers, HbmpcConfig.N, HbmpcConfig.t, HbmpcConfig.my_id, k)
         )
+        print(f" after the loop")
     finally:
         loop.close()
