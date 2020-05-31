@@ -642,8 +642,10 @@ async def triple_matrix(ctx, **kwargs):
     # matrix_b = [[ctx.preproc.get_rand(ctx).v for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     matrix_c = [[ctx.Share(7) for _ in range(k)] for _ in range(k)]
+    print(f" am I here?2")
     A1,B1,C1 = generate_beaver_matrix_hack(ctx, k, k, k)
     A,B,C,D = generate_beaver_triple_matrix_hack(ctx, k, k, k,k)
+    print(f" am I here?3")
     start = time.time()
     result = await beaver_mul_three_matrix_with_precomputation(ctx, matrix_a, matrix_b, matrix_c, [A,B,C,D],[A1,B1,C1])
     stop = time.time()
