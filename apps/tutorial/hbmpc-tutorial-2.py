@@ -685,17 +685,17 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
     try:
-        pp_elements = FakePreProcessedElements()
-        k = 3 # How many of each kind of preproc
-        if HbmpcConfig.my_id == 0:
+        # pp_elements = FakePreProcessedElements()
+        # k = 3 # How many of each kind of preproc
+        # if HbmpcConfig.my_id == 0:
             
-            # pp_elements.generate_bits(k* 1000, HbmpcConfig.N, HbmpcConfig.t)
-            # pp_elements.generate_rands(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
-            pp_elements.generate_triples(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
-            # pp_elements.generate_zeros(k * k, HbmpcConfig.N, HbmpcConfig.t)
-            pp_elements.preprocessing_done()
-        else:
-            loop.run_until_complete(pp_elements.wait_for_preprocessing())
+        #     # pp_elements.generate_bits(k* 1000, HbmpcConfig.N, HbmpcConfig.t)
+        #     # pp_elements.generate_rands(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.generate_triples(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
+        #     # pp_elements.generate_zeros(k * k, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.preprocessing_done()
+        # else:
+        #     loop.run_until_complete(pp_elements.wait_for_preprocessing())
 
         loop.run_until_complete(
             _run(HbmpcConfig.peers, HbmpcConfig.N, HbmpcConfig.t, HbmpcConfig.my_id, k)
