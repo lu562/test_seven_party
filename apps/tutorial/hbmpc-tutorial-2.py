@@ -686,7 +686,7 @@ if __name__ == "__main__":
     loop.set_debug(True)
     try:
         # pp_elements = FakePreProcessedElements()
-        # k = 3 # How many of each kind of preproc
+        k = 3 # How many of each kind of preproc
         # if HbmpcConfig.my_id == 0:
             
         #     # pp_elements.generate_bits(k* 1000, HbmpcConfig.N, HbmpcConfig.t)
