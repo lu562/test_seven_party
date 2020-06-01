@@ -12,12 +12,13 @@ import logging
 import random
 import threading
 import time
+import math
 from honeybadgermpc.preprocessing import (
     PreProcessedElements as FakePreProcessedElements,
 )
 
 from honeybadgermpc.progs.mixins.dataflow import Share
-
+from honeybadgermpc.utils.task_pool import TaskPool
 from honeybadgermpc.progs.mixins.share_arithmetic import (
     BeaverMultiply,
     BeaverMultiplyArrays,
@@ -536,7 +537,24 @@ def offline_multi_matrix_multiply(ctx, k, n):
         R_inverse.append(a_inverse)
     return R, R_inverse
 
+async def run_command_sync(command):
+    proc = await asyncio.create_subprocess_shell(
+        command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
 
+    logging.debug(f"Command:{command}")
+    logging.debug(f"Output: {stdout}")
+    if len(stderr):
+        logging.info(f"Error: {stderr}")
+
+async def cpp_mul(node_id, rounds, index):
+    input_file_name1 = f"sharedata/matrix_{node_id}_{rounds}_{2 * index}.input"
+    input_file_name2 = f"sharedata/matrix_{node_id}_{rounds}_{2 * index + 1}.input"
+    output_file_name = f"sharedata/output_{node_id}_{rounds}_{index}"
+
+    runcmd = f"./apps/tutorial/cpp/matrix_mul {input_file_name1} {input_file_name2} {output_file_name}"
+    await run_command_sync(runcmd)
 
 async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple):
 
@@ -550,9 +568,45 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     triples = await batch_matrix_open(ctx, t)
 
     # version 1: single threadW
+    # result = triples[0]
+    # for i in range(1, len(M)):
+    #     result = matrix_mul(ctx, result, triples[i])
+
+    # version 2: parallel version
+    temp = len(triples)
+    for it in range(int(math.log(len(M), 2))):
+        # write matrices into files
+        for i in range(temp):
+            file_name = f"matrix_{ctx.myid}_{it}_{i}.input"
+            file_path = f"sharedata/{file_name}"
+            with open(file_path, "w") as f:
+                print(ctx.field.modulus, file=f)
+                print(len(triples[i]), file=f)
+                print(len(triples[i][0]), file=f)
+                for ii in range(len(triples[i])):
+                    for jj in range(len(triples[i][0])):
+                        print(triples[i][ii][jj].value, file=f)
+        temp = int(temp / 2)
+        # run cpp codes to do local matrix mul
+        pool = TaskPool(256)
+        for i in range(temp):
+            pool.submit(cpp_mul(ctx.myid, it, i))
+        await pool.close()
+
+        # read cpp output from files
+        for i in range(temp):
+            file_name = f"output_{ctx.myid}_{it}_{i}"
+            file_path = f"sharedata/{file_name}"
+            with open(file_path, "r") as f:
+                assert ctx.field.modulus == int(f.readline())
+                row = int(f.readline())
+                column = int(f.readline())
+                for r in range(row):
+                    for c in range(column):
+                        triples[i][r][c] = ctx.field(int(f.readline()))
     result = triples[0]
-    for i in range(1, len(M)):
-        result = matrix_mul(ctx, result, triples[i])
+
+
     result = matrix_mul(ctx, R_inverse[0], result)
     # Note: this can also be moved outside. TBD
     A, B, C = generate_beaver_matrix_hack(ctx, len(M[0]), len(M[0]), len(M[0]))
@@ -575,17 +629,13 @@ async def multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_tr
         triple_secret.append(t)
         # t_reveal = await matrix_open(ctx, t)
         # triples.append(t_reveal)
-    p1 = time.time()
     triples = await batch_matrix_open(ctx, triple_secret)
-    p2 = time.time()
     # version 1: single threadW
     result = triples[0]
     for i in range(1, len(M)):
         result = matrix_mul(ctx, result, triples[i])
-    p3 = time.time()
     result = matrix_mul(ctx, R_inverse[0], result)
-    p4 = time.time()
-    # Note: this can also be moved outside. TBD
+ 
 
     logging.info(f"{p1 - start}")
     logging.info(f"{p2 - p1}")
@@ -619,7 +669,7 @@ async def simple_matrix(ctx, **kwargs):
     k = kwargs["k"]
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
-    n = 5
+    n = 8
     R, R_inverse = offline_multi_matrix_multiply(ctx, k, n)
     super_triple, normal_triple = triple_generation_for_multi_matrix(ctx, k, n)
     M = []
@@ -629,23 +679,20 @@ async def simple_matrix(ctx, **kwargs):
     res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
     stop = time.time()
     last_time = stop - start
-    # res_open = await matrix_open(ctx, res)
-    # logging.info(f"{res_open}")
+    res_open = await matrix_open(ctx, res)
+    logging.info(f"{res_open}")
     logging.info(f"{last_time}")
     return res
 
 async def triple_matrix(ctx, **kwargs):
     k = kwargs["k"]
-    print(f" am I here?")
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
 
     # matrix_b = [[ctx.preproc.get_rand(ctx).v for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     matrix_c = [[ctx.Share(7) for _ in range(k)] for _ in range(k)]
-    print(f" am I here?2")
     A1,B1,C1 = generate_beaver_matrix_hack(ctx, k, k, k)
     A,B,C,D = generate_beaver_triple_matrix_hack(ctx, k, k, k,k)
-    print(f" am I here?3")
     start = time.time()
     result = await beaver_mul_three_matrix_with_precomputation(ctx, matrix_a, matrix_b, matrix_c, [A,B,C,D],[A1,B1,C1])
     stop = time.time()
@@ -665,7 +712,7 @@ async def _run(peers, n, t, my_id, k):
     from honeybadgermpc.ipc import ProcessProgramRunner
 
     async with ProcessProgramRunner(peers, n, t, my_id, mpc_config) as runner:
-        await runner.execute("0", triple_matrix, k=k)
+        await runner.execute("0", simple_matrix, k=k)
         bytes_sent = runner.node_communicator.bytes_sent
         print(f"[{my_id}] Total bytes sent out: {bytes_sent}")
 
@@ -687,22 +734,22 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
+    k = 3
     try:
         # pp_elements = FakePreProcessedElements()
-        k = 3 # How many of each kind of preproc
+        # # k = 3 # How many of each kind of preproc
         # if HbmpcConfig.my_id == 0:
             
         #     # pp_elements.generate_bits(k* 1000, HbmpcConfig.N, HbmpcConfig.t)
         #     # pp_elements.generate_rands(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
-        #     pp_elements.generate_triples(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.generate_triples(420000, HbmpcConfig.N, HbmpcConfig.t)
         #     # pp_elements.generate_zeros(k * k, HbmpcConfig.N, HbmpcConfig.t)
         #     pp_elements.preprocessing_done()
         # else:
         #     loop.run_until_complete(pp_elements.wait_for_preprocessing())
-        print(f" before the loop")
+
         loop.run_until_complete(
             _run(HbmpcConfig.peers, HbmpcConfig.N, HbmpcConfig.t, HbmpcConfig.my_id, k)
         )
-        print(f" after the loop")
     finally:
         loop.close()
