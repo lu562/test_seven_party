@@ -679,8 +679,8 @@ async def simple_matrix(ctx, **kwargs):
     res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
     stop = time.time()
     last_time = stop - start
-    res_open = await matrix_open(ctx, res)
-    logging.info(f"{res_open}")
+    # res_open = await matrix_open(ctx, res)
+    # logging.info(f"{res_open}")
     logging.info(f"{last_time}")
     return res
 
