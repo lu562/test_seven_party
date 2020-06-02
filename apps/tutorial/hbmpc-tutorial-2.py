@@ -667,7 +667,7 @@ def triple_generation_for_multi_matrix(ctx, k, n):
 
 async def simple_matrix(ctx, **kwargs):
     k = kwargs["k"]
-    n = 16
+    n = 32
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     R, R_inverse = offline_multi_matrix_multiply(ctx, k, n)
