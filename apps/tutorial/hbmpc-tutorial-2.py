@@ -282,7 +282,10 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
         Y_minus_B[nn] = [[Y[nn][i][j] - B[i][j] for j in range(n)] for i in range(m)]
         Z_minus_C[nn] = [[Z[nn][i][j] - C[i][j] for j in range(q)] for i in range(n)]
     batch = X_minus_A + Y_minus_B + Z_minus_C
+    startt2 = time.time()
     o = await batch_matrix_open(ctx, batch)
+    stopt2 = time.time()
+    logging.info(f"time for opening all (X-A),(Y-B),(Z-C): {startt2 - stopt2}")
     X_minus_A_open = o[0: num_of_matrix]
     Y_minus_B_open = o[num_of_matrix : num_of_matrix * 2]
     Z_minus_C_open = o[num_of_matrix * 2 :]
@@ -297,11 +300,14 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     X_Y_minus_B_C = [0 for _ in range(num_of_matrix)]
     X_minus_A_BZ = [0 for _ in range(num_of_matrix)]
     AY_Z_minus_C = [0 for _ in range(num_of_matrix)]
+    startt3 = time.time()
     for nn in range(num_of_matrix):
         E[nn] = matrix_mul(ctx, X_minus_A_open[nn], Y_minus_B_open[nn])
         F[nn] = matrix_mul(ctx, E[nn], Z_minus_C_open[nn])
         res[nn] = matrix_addition(res[nn], F[nn])
         X_Y_minus_B[nn] = matrix_mul(ctx, X[nn] , Y_minus_B_open[nn])
+    stopt3 = time.time()
+    logging.info(f"time for computing all share matrices and opened matrices(part 1): {startt3 - stopt3}")
     # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
     A2 = normal_triple[0]
     B2 = normal_triple[1]
@@ -313,8 +319,11 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     for nn in range(num_of_matrix):
         batch_X = batch_X + [B,A,X_Y_minus_B[nn]]
         batch_Y = batch_Y + [Z[nn],Y[nn],C]
+    startt4 = time.time()
     o = await batch_beaver_mul_matrix(ctx, batch_X, batch_Y, A2, B2, C2)
-
+    stopt4 = time.time()
+    logging.info(f"time for batch beaver matices mul: {startt4 - stopt4}")
+    startt5 = time.time()  
     for nn in range(num_of_matrix):
         BZ[nn] = o[0 + 3 * nn]
         X_minus_A_BZ[nn] = matrix_mul(ctx, X_minus_A_open[nn] , BZ[nn])
@@ -324,7 +333,8 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
         res[nn] = matrix_addition(res[nn], AY_Z_minus_C[nn])
         X_Y_minus_B_C[nn] = o[2 + 3 * nn]
         res[nn] = matrix_addition(res[nn], X_Y_minus_B_C[nn])
-
+    stopt5 = time.time()
+    logging.info(f"time for computing all share matrices and opened matrices(part 2): {startt5 - stopt5}")
         res[nn] = matrix_addition(res[nn], D)
     return res
 
@@ -565,8 +575,10 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
         return None
     # tricks: same super triple used for all multiplications
     t = await batch_beaver_mul_three_matrix_with_precomputation(ctx, R[:-1], M, R_inverse[1:], super_triple[0:4], normal_triple[0:3])
+    start_open =  time.time()
     triples = await batch_matrix_open(ctx, t)
-
+    stop_open =  time.time()
+    logging.info(f"time for opening R_iX_iR_(i+1)^(-1): {start_open - stop_open}")
     # version 1: single threadW
     # result = triples[0]
     # for i in range(1, len(M)):
@@ -738,7 +750,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k =40
+    k =20
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
