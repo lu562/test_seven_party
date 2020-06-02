@@ -573,6 +573,7 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     #     result = matrix_mul(ctx, result, triples[i])
 
     # version 2: parallel version
+    startt = time.time()
     temp = len(triples)
     for it in range(int(math.log(len(M), 2))):
         # write matrices into files
@@ -604,6 +605,9 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
                 for r in range(row):
                     for c in range(column):
                         triples[i][r][c] = ctx.field(int(f.readline()))
+    stopt = time.time()
+    last_time = stopt - startt
+    logging.info(f"local computation time: {last_time}")
     result = triples[0]
 
 
