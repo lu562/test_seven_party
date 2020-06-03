@@ -761,7 +761,7 @@ def triple_generation_for_multi_matrix(ctx, k, n):
 
 async def simple_matrix(ctx, **kwargs):
     k = kwargs["k"]
-    n = 128
+    n = 8
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     R, R_inverse = offline_multi_matrix_multiply(ctx, k, n)
@@ -828,7 +828,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k =3
+    k =10
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
