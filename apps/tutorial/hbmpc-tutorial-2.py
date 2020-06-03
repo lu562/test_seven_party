@@ -333,9 +333,9 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
         res[nn] = matrix_addition(res[nn], AY_Z_minus_C[nn])
         X_Y_minus_B_C[nn] = o[2 + 3 * nn]
         res[nn] = matrix_addition(res[nn], X_Y_minus_B_C[nn])
+        res[nn] = matrix_addition(res[nn], D)
     stopt5 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 2): {startt5 - stopt5}")
-        res[nn] = matrix_addition(res[nn], D)
     return res
 
 
