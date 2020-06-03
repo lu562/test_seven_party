@@ -16,7 +16,7 @@ import math
 from honeybadgermpc.preprocessing import (
     PreProcessedElements as FakePreProcessedElements,
 )
-
+from honeybadgermpc.field import GFElement
 from honeybadgermpc.progs.mixins.dataflow import Share
 from honeybadgermpc.utils.task_pool import TaskPool
 from honeybadgermpc.progs.mixins.share_arithmetic import (
@@ -72,7 +72,7 @@ def generate_beaver_triple_matrix_hack(ctx, k, m, n, q):
 #     res = [[0 for _ in range(c)] for _ in range(k)]
 
 #     for i in range(k):
-#     	res[i] = await ctx.ShareArray(A[i]).open()
+#       res[i] = await ctx.ShareArray(A[i]).open()
 #     return res
 
 async def matrix_open(ctx, A):
@@ -200,21 +200,24 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
     o = await batch_matrix_open(ctx, D+E)
     D_open = [0 for _ in range(num_of_matrix)]
     E_open = [0 for _ in range(num_of_matrix)]
+    DE = [0 for _ in range(num_of_matrix)]
+    AE = [0 for _ in range(num_of_matrix)]
+    DB = [0 for _ in range(num_of_matrix)]
     for i in range(num_of_matrix):
         D_open[i] = o[i]
     for i in range(num_of_matrix):
         E_open[i] = o[i + num_of_matrix]
     res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]for _ in range(num_of_matrix)]
+    DE = await batch_cpp_matrix_mul(ctx, D_open, E_open)
     for i in range(num_of_matrix):
+        res[i] = matrix_addition(res[i], DE[i])
+    AE = await batch_cpp_matrix_mul(ctx, [A for _ in range(num_of_matrix)], E_open)
+    for i in range(num_of_matrix):
+        res[i] = matrix_addition(res[i], AE[i])
 
-        DE = matrix_mul(ctx, D_open[i], E_open[i])
-        res[i] = matrix_addition(res[i], DE)
-        AE = matrix_mul_plain_share(ctx, A, E_open[i])
-
-        res[i] = matrix_addition(res[i], AE)
-
-        DB = matrix_mul_plain_share(ctx, D_open[i], B)
-        res[i] = matrix_addition(res[i], DB)  
+    DB = await batch_cpp_matrix_mul(ctx, D_open, [B for _ in range(num_of_matrix)])
+    for i in range(num_of_matrix):
+        res[i] = matrix_addition(res[i], DB[i])  
 
         res[i] = matrix_addition(res[i], C)
 
@@ -285,7 +288,7 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt2 = time.time()
     o = await batch_matrix_open(ctx, batch)
     stopt2 = time.time()
-    logging.info(f"time for opening all (X-A),(Y-B),(Z-C): {startt2 - stopt2}")
+    logging.info(f"time for opening all (X-A),(Y-B),(Z-C): {stopt2 - startt2}")
     X_minus_A_open = o[0: num_of_matrix]
     Y_minus_B_open = o[num_of_matrix : num_of_matrix * 2]
     Z_minus_C_open = o[num_of_matrix * 2 :]
@@ -307,7 +310,7 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
         res[nn] = matrix_addition(res[nn], F[nn])
         X_Y_minus_B[nn] = matrix_mul(ctx, X[nn] , Y_minus_B_open[nn])
     stopt3 = time.time()
-    logging.info(f"time for computing all share matrices and opened matrices(part 1): {startt3 - stopt3}")
+    logging.info(f"time for computing all share matrices and opened matrices(part 1): { stopt3 - startt3 }")
     # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
     A2 = normal_triple[0]
     B2 = normal_triple[1]
@@ -322,7 +325,7 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt4 = time.time()
     o = await batch_beaver_mul_matrix(ctx, batch_X, batch_Y, A2, B2, C2)
     stopt4 = time.time()
-    logging.info(f"time for batch beaver matices mul: {startt4 - stopt4}")
+    logging.info(f"time for batch beaver matices mul: {stopt4 - startt4}")
     startt5 = time.time()  
     for nn in range(num_of_matrix):
         BZ[nn] = o[0 + 3 * nn]
@@ -335,7 +338,7 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
         res[nn] = matrix_addition(res[nn], X_Y_minus_B_C[nn])
         res[nn] = matrix_addition(res[nn], D)
     stopt5 = time.time()
-    logging.info(f"time for computing all share matrices and opened matrices(part 2): {startt5 - stopt5}")
+    logging.info(f"time for computing all share matrices and opened matrices(part 2): {stopt5 - startt5}")
     return res
 
 
@@ -566,6 +569,76 @@ async def cpp_mul(node_id, rounds, index):
     runcmd = f"./apps/tutorial/cpp/matrix_mul {input_file_name1} {input_file_name2} {output_file_name}"
     await run_command_sync(runcmd)
 
+async def cpp_mul_with_name(A, B, C):
+
+    runcmd = f"./apps/tutorial/cpp/matrix_mul {A} {B} {C}"
+    await run_command_sync(runcmd)
+
+async def batch_cpp_matrix_mul(ctx, A, B):
+
+    num_of_batch = len(A)
+    # honeybadgermpc.field.GFElement
+    A_type = (type(A[0][0][0]) == GFElement)
+    B_type = (type(B[0][0][0]) == GFElement)
+
+    result = [[[0 for _ in range(len(A[0][0]))] for _ in range(len(A[0]))] for _ in range(num_of_batch)]
+    # write matrices A  into files
+    for i in range(num_of_batch):
+        file_name = f"matrix_{ctx.myid}_A_{i}.input"
+        file_path = f"sharedata/{file_name}"
+        with open(file_path, "w") as f:
+            print(ctx.field.modulus, file=f)
+            print(len(A[i]), file=f)
+            print(len(A[i][0]), file=f)
+            if(A_type):
+                for ii in range(len(A[i])):
+                    for jj in range(len(A[i][0])):
+                        print(A[i][ii][jj].value, file=f)
+            else:
+                 for ii in range(len(A[i])):
+                    for jj in range(len(A[i][0])):
+                        print(A[i][ii][jj].v.value, file=f)
+    # write matrices B into files
+    for i in range(num_of_batch):
+        file_name = f"matrix_{ctx.myid}_B_{i}.input"
+        file_path = f"sharedata/{file_name}"
+        with open(file_path, "w") as f:
+            print(ctx.field.modulus, file=f)
+            print(len(B[i]), file=f)
+            print(len(B[i][0]), file=f)
+            if(B_type):
+                for ii in range(len(B[i])):
+                    for jj in range(len(B[i][0])):
+                        print(B[i][ii][jj].value, file=f)
+            else:
+                 for ii in range(len(B[i])):
+                    for jj in range(len(B[i][0])):
+                        print(B[i][ii][jj].v.value, file=f)  
+    # do computation
+    pool = TaskPool(256)
+    for i in range(num_of_batch):
+        pool.submit(cpp_mul_with_name(f"sharedata/matrix_{ctx.myid}_A_{i}.input", f"sharedata/matrix_{ctx.myid}_B_{i}.input", f"sharedata/matrix_{ctx.myid}_C_{i}.output"))
+    await pool.close()
+
+    #load result from files
+    for i in range(num_of_batch):
+        file_name = f"matrix_{ctx.myid}_C_{i}.output"
+        file_path = f"sharedata/{file_name}"
+        with open(file_path, "r") as f:
+            assert ctx.field.modulus == int(f.readline())
+            row = int(f.readline())
+            column = int(f.readline())
+            if A_type and B_type:
+                for r in range(row):
+                    for c in range(column):
+                        result[i][r][c] = ctx.field(int(f.readline()))
+            else:
+                for r in range(row):
+                    for c in range(column):
+                        result[i][r][c] = ctx.Share(int(f.readline()))                
+    return result
+
+
 async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple):
 
     if len(M) < 2 or len(R) < 2 or len(M) != (len(R) - 1) or len(R_inverse) != len(R):
@@ -695,8 +768,8 @@ async def simple_matrix(ctx, **kwargs):
     res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
     stop = time.time()
     last_time = stop - start
-    # res_open = await matrix_open(ctx, res)
-    # logging.info(f"{res_open}")
+    res_open = await matrix_open(ctx, res)
+    logging.info(f"{res_open}")
     logging.info(f"{last_time}")
     return res
 
@@ -758,7 +831,7 @@ if __name__ == "__main__":
             
         #     # pp_elements.generate_bits(k* 1000, HbmpcConfig.N, HbmpcConfig.t)
         #     # pp_elements.generate_rands(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
-        #     pp_elements.generate_triples(420000, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.generate_triples(k * k * 5, HbmpcConfig.N, HbmpcConfig.t)
         #     # pp_elements.generate_zeros(k * k, HbmpcConfig.N, HbmpcConfig.t)
         #     pp_elements.preprocessing_done()
         # else:
