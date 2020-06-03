@@ -304,12 +304,12 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     X_minus_A_BZ = [0 for _ in range(num_of_matrix)]
     AY_Z_minus_C = [0 for _ in range(num_of_matrix)]
     startt3 = time.time()
-    E = batch_cpp_matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
-    F = batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
+    E = await batch_cpp_matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
+    F = await batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
     for nn in range(num_of_matrix):
         res[nn] = matrix_addition(res[nn], F[nn])
 
-    X_Y_minus_B = batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
+    X_Y_minus_B = await batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
     stopt3 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 1): { stopt3 - startt3 }")
     # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
@@ -331,13 +331,13 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     for nn in range(num_of_matrix):
         BZ[nn] = o[0 + 3 * nn]
 
-    X_minus_A_BZ = batch_cpp_matrix_mul(ctx, X_minus_A_open , BZ)
+    X_minus_A_BZ = await batch_cpp_matrix_mul(ctx, X_minus_A_open , BZ)
 
     for nn in range(num_of_matrix):
         res[nn] = matrix_addition(res[nn], X_minus_A_BZ[nn])
         AY[nn] = o[1 + 3 * nn]
 
-    AY_Z_minus_C = batch_beaver_mul_matrix(ctx, AY , Z_minus_C_open)
+    AY_Z_minus_C = await batch_cpp_matrix_mul(ctx, AY , Z_minus_C_open)
     for nn in range(num_of_matrix):
         res[nn] = matrix_addition(res[nn], AY_Z_minus_C[nn])
         X_Y_minus_B_C[nn] = o[2 + 3 * nn]
@@ -346,7 +346,6 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     stopt5 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 2): {stopt5 - startt5}")
     return res
-
 
 async def beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
     k = len(X)
