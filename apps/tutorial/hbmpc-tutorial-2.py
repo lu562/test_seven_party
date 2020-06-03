@@ -304,11 +304,12 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     X_minus_A_BZ = [0 for _ in range(num_of_matrix)]
     AY_Z_minus_C = [0 for _ in range(num_of_matrix)]
     startt3 = time.time()
+    E = batch_cpp_matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
+    F = batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
     for nn in range(num_of_matrix):
-        E[nn] = matrix_mul(ctx, X_minus_A_open[nn], Y_minus_B_open[nn])
-        F[nn] = matrix_mul(ctx, E[nn], Z_minus_C_open[nn])
         res[nn] = matrix_addition(res[nn], F[nn])
-        X_Y_minus_B[nn] = matrix_mul(ctx, X[nn] , Y_minus_B_open[nn])
+
+    X_Y_minus_B = batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
     stopt3 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 1): { stopt3 - startt3 }")
     # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
@@ -329,10 +330,15 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt5 = time.time()  
     for nn in range(num_of_matrix):
         BZ[nn] = o[0 + 3 * nn]
-        X_minus_A_BZ[nn] = matrix_mul(ctx, X_minus_A_open[nn] , BZ[nn])
+
+    X_minus_A_BZ = batch_cpp_matrix_mul(ctx, X_minus_A_open , BZ)
+
+    for nn in range(num_of_matrix):
         res[nn] = matrix_addition(res[nn], X_minus_A_BZ[nn])
         AY[nn] = o[1 + 3 * nn]
-        AY_Z_minus_C[nn] = matrix_mul(ctx, AY[nn] , Z_minus_C_open[nn])
+
+    AY_Z_minus_C = batch_beaver_mul_matrix(ctx, AY , Z_minus_C_open)
+    for nn in range(num_of_matrix):
         res[nn] = matrix_addition(res[nn], AY_Z_minus_C[nn])
         X_Y_minus_B_C[nn] = o[2 + 3 * nn]
         res[nn] = matrix_addition(res[nn], X_Y_minus_B_C[nn])
@@ -768,8 +774,8 @@ async def simple_matrix(ctx, **kwargs):
     res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
     stop = time.time()
     last_time = stop - start
-    res_open = await matrix_open(ctx, res)
-    logging.info(f"{res_open}")
+    # res_open = await matrix_open(ctx, res)
+    # logging.info(f"{res_open}")
     logging.info(f"{last_time}")
     return res
 
