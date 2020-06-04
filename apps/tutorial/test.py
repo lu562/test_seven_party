@@ -62,7 +62,7 @@ async def poly(ctx, **kwargs):
     # generate k random input
     k = kwargs["k"]
 
-    degrees = [random.randint(1,1000) for _ in range(k)]
+    degrees = [random.randint(1,5000) for _ in range(k)]
     terms = [ctx.Share(random.randint(1,50)) for _ in range(k)]
 
     precompute_randoms,product = polynomial_offline(ctx, degrees)
