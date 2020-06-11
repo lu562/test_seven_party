@@ -609,6 +609,9 @@ async def cpp_mul_with_name(A, B, C):
     runcmd = f"./apps/tutorial/cpp/matrix_mul {A} {B} {C}"
     await run_command_sync(runcmd)
 
+
+
+
 async def batch_cpp_matrix_mul(ctx, A, B):
 
     num_of_batch = len(A)
@@ -650,11 +653,13 @@ async def batch_cpp_matrix_mul(ctx, A, B):
                     for jj in range(len(B[i][0])):
                         print(B[i][ii][jj].v.value, file=f)  
     # do computation
+    start = time.time()
     pool = TaskPool(256)
     for i in range(num_of_batch):
         pool.submit(cpp_mul_with_name(f"sharedata/matrix_{ctx.myid}_A_{i}.input", f"sharedata/matrix_{ctx.myid}_B_{i}.input", f"sharedata/matrix_{ctx.myid}_C_{i}.output"))
     await pool.close()
-
+    stop = time.time()
+    logging.info(f"Batch_cpp_mul, pure CPP time: { stop - start }")
     #load result from files
     for i in range(num_of_batch):
         file_name = f"matrix_{ctx.myid}_C_{i}.output"
@@ -719,11 +724,13 @@ async def batch_cpp_matrix_add(ctx, A, B):
                     for jj in range(len(B[i][0])):
                         print(B[i][ii][jj].v.value, file=f)  
     # do computation
+    start = time.time()
     pool = TaskPool(256)
     for i in range(num_of_batch):
         pool.submit(cpp_add_with_name(f"sharedata/matrix_{ctx.myid}_A_{i}.input", f"sharedata/matrix_{ctx.myid}_B_{i}.input", f"sharedata/matrix_{ctx.myid}_C_{i}.output"))
     await pool.close()
-
+    stop = time.time()
+    logging.info(f"Batch_cpp_add, pure CPP time: { stop - start }")
     #load result from files
     for i in range(num_of_batch):
         file_name = f"matrix_{ctx.myid}_C_{i}.output"
@@ -862,7 +869,7 @@ def triple_generation_for_multi_matrix(ctx, k, n):
 
 async def simple_matrix(ctx, **kwargs):
     k = kwargs["k"]
-    n = 32
+    n = 16
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/matrix_add")
