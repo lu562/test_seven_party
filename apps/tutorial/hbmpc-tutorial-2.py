@@ -242,7 +242,7 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
 
 
     res = await batch_cpp_matrix_add(ctx, res, DB)
-    res = await batch_cpp_matrix_add(ctx, res, C)
+    res = await batch_cpp_matrix_add(ctx, res, [C for _ in range(num_of_matrix)])
     stop8 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to add (X-A)B and AB into result(2 addition): {stop8 - start8}")
     return res
