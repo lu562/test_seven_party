@@ -219,8 +219,6 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
     stop3 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)(Y-B): {stop3 - start3}")
     start4 =  time.time()
-    # for i in range(num_of_matrix):
-    #     res[i] = matrix_addition(res[i], DE[i])
     res = await batch_cpp_matrix_add(ctx, res, DE)
     stop4 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to add (X-A)(Y-B) into result: {stop4 - start4}")
@@ -230,8 +228,7 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
     stop5 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to compute A(Y-B): {stop5 - start5}")
     start6 =  time.time()
-    for i in range(num_of_matrix):
-        res[i] = matrix_addition(res[i], AE[i])
+    res = await batch_cpp_matrix_add(ctx, res, AE)
     stop6 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to add A(Y-B) into result: {stop6 - start6}")
 
@@ -242,10 +239,10 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
 
 
     start8 =  time.time()   
-    for i in range(num_of_matrix):
-        res[i] = matrix_addition(res[i], DB[i])  
 
-        res[i] = matrix_addition(res[i], C)
+
+    res = await batch_cpp_matrix_add(ctx, res, DB)
+    res = await batch_cpp_matrix_add(ctx, res, C)
     stop8 =  time.time()
     logging.info(f"Inside batch beaver matrix mul: time to add (X-A)B and AB into result(2 addition): {stop8 - start8}")
     return res
@@ -333,9 +330,8 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt3 = time.time()
     E = await batch_cpp_matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
     F = await batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
-    for nn in range(num_of_matrix):
-        res[nn] = matrix_addition(res[nn], F[nn])
 
+    res = await batch_cpp_matrix_add(ctx, res, F)
     X_Y_minus_B = await batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
     stopt3 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 1): { stopt3 - startt3 }")
@@ -366,10 +362,11 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
 
     AY_Z_minus_C = await batch_cpp_matrix_mul(ctx, AY , Z_minus_C_open)
     for nn in range(num_of_matrix):
-        res[nn] = matrix_addition(res[nn], AY_Z_minus_C[nn])
         X_Y_minus_B_C[nn] = o[2 + 3 * nn]
-        res[nn] = matrix_addition(res[nn], X_Y_minus_B_C[nn])
-        res[nn] = matrix_addition(res[nn], D)
+
+    res = await batch_cpp_matrix_add(ctx, res, AY_Z_minus_C)
+    res = await batch_cpp_matrix_add(ctx, res, X_Y_minus_B_C)
+    res = await batch_cpp_matrix_add(ctx, res,  D)
     stopt5 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 2): {stopt5 - startt5}")
     return res
