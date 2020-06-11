@@ -29,7 +29,7 @@ mpc_config = {
     MixinConstants.MultiplyShareArray: BeaverMultiplyArrays(),
     MixinConstants.MultiplyShare: BeaverMultiply(),
 }
-random.seed(563)
+random.seed(562)
 
 def generate_beaver_matrix_hack(ctx, k, m, n):
     A_hack = [[i + j for j in range(m)] for i in range(k)]
@@ -330,11 +330,16 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt3 = time.time()
     E = await batch_cpp_matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
     F = await batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
-
-    res = await batch_cpp_matrix_add(ctx, res, F)
     X_Y_minus_B = await batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
+
+
     stopt3 = time.time()
-    logging.info(f"time for computing all share matrices and opened matrices(part 1): { stopt3 - startt3 }")
+    logging.info(f"time for computing all share matrices and opened matrices(3 mul): { stopt3 - startt3 }")
+    startt33 = time.time()
+    res = await batch_cpp_matrix_add(ctx, res, F)
+    stopt33 = time.time()
+    logging.info(f"time for computing all share matrices and opened matrices(1 add): { stopt33 - startt33 }")
+
     # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
     A2 = normal_triple[0]
     B2 = normal_triple[1]
