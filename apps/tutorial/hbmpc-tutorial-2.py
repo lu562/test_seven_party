@@ -29,7 +29,7 @@ mpc_config = {
     MixinConstants.MultiplyShareArray: BeaverMultiplyArrays(),
     MixinConstants.MultiplyShare: BeaverMultiply(),
 }
-random.seed(562)
+random.seed(563)
 
 def generate_beaver_matrix_hack(ctx, k, m, n):
     A_hack = [[i + j for j in range(m)] for i in range(k)]
@@ -857,7 +857,7 @@ def triple_generation_for_multi_matrix(ctx, k, n):
 
 async def simple_matrix(ctx, **kwargs):
     k = kwargs["k"]
-    n = 16
+    n = 32
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/matrix_add")
