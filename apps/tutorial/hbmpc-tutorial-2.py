@@ -135,7 +135,7 @@ async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     # D = [[X[i][j] - A[i][j] for j in range(m)] for i in range(k)]
     # # E = Y - B
     # E = [[Y[i][j] - B[i][j] for j in range(n)] for i in range(m)]
-    o = await batch_matrix_open(ctx, [D,E])
+    o = await batch_matrix_open(ctx, [D[0],E[0]])
     D_open = o[0]
     E_open = o[1]
     res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]]
@@ -573,7 +573,7 @@ async def batch_cpp_matrix_mul(ctx, A, B):
         cpp_time = f.readline()
     # logging.info(f"Batch_cpp_mul, pure computation time each call: {cpp_time}")
     total_mul_time = total_mul_time + float(cpp_time)
-    logging.info(f"add time now:: {total_mul_time}")
+    logging.info(f"mul time now:: {total_mul_time}")
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
     file_path = f"sharedata/{file_name}"
