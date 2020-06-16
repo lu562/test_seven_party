@@ -732,7 +732,8 @@ async def simple_matrix(ctx, **kwargs):
     n = 16
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
-    await run_command_sync("chmod 777 ./apps/tutorial/cpp/matrix_add")
+    await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
+    await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_mul")
     R, R_inverse = offline_multi_matrix_multiply(ctx, k, n)
     super_triple, normal_triple = triple_generation_for_multi_matrix(ctx, k, n)
     M = []
