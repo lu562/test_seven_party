@@ -573,7 +573,7 @@ async def batch_cpp_matrix_mul(ctx, A, B):
         cpp_time = f.readline()
     # logging.info(f"Batch_cpp_mul, pure computation time each call: {cpp_time}")
     total_mul_time = total_mul_time + float(cpp_time)
-    logging.info(f"mul time now:: {total_mul_time}")
+    # logging.info(f"mul time now:: {total_mul_time}")
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
     file_path = f"sharedata/{file_name}"
@@ -644,7 +644,7 @@ async def batch_cpp_matrix_add(ctx, A, B):
         cpp_time = f.readline()
 
     total_add_time = total_add_time + float(cpp_time)
-    logging.info(f"add time now:: {total_add_time}")
+    # logging.info(f"add time now:: {total_add_time}")
 
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
