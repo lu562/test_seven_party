@@ -573,6 +573,7 @@ async def batch_cpp_matrix_mul(ctx, A, B):
         cpp_time = f.readline()
     # logging.info(f"Batch_cpp_mul, pure computation time each call: {cpp_time}")
     total_mul_time = total_mul_time + float(cpp_time)
+    logging.info(f"add time now:: {total_mul_time}")
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
     file_path = f"sharedata/{file_name}"
@@ -641,9 +642,9 @@ async def batch_cpp_matrix_add(ctx, A, B):
     cpp_time = 0;
     with open(file_path, "r") as f:
         cpp_time = f.readline()
-    # logging.info(f"Batch_cpp_add, pure CPP time: {cpp_time}")
-    total_add_time = total_add_time + float(cpp_time)
 
+    total_add_time = total_add_time + float(cpp_time)
+    logging.info(f"add time now:: {total_add_time}")
 
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
@@ -851,7 +852,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k = 160
+    k = 20
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
