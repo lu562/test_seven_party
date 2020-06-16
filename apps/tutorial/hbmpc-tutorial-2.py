@@ -30,6 +30,11 @@ mpc_config = {
     MixinConstants.MultiplyShare: BeaverMultiply(),
 }
 random.seed(562)
+# non multi threading if MODE = 0
+MODE = 1 
+total_compute_time = 0
+total_communicate_time = 0
+
 
 def generate_beaver_matrix_hack(ctx, k, m, n):
     A_hack = [[i + j for j in range(m)] for i in range(k)]
@@ -66,31 +71,9 @@ def generate_beaver_triple_matrix_hack(ctx, k, m, n, q):
 
     return A, B, C, D
 
-# async def matrix_open(ctx, A):
-#     k = len(A)
-#     c = len(A[0])
-#     res = [[0 for _ in range(c)] for _ in range(k)]
-
-#     for i in range(k):
-#       res[i] = await ctx.ShareArray(A[i]).open()
-#     return res
-
-async def matrix_open(ctx, A):
-    k = len(A)
-    c = len(A[0])
-    array = [0 for _ in range(k * c)]
-    open_array = [0 for _ in range(k * c)]
-    for i in range(k):
-        for j in range(c):
-            array[i * k + j] = A[i][j]
-    res = [[0 for _ in range(c)] for _ in range(k)]    
-    open_array  = await ctx.ShareArray(array).open()
-    for i in range(k):
-        for j in range(c):
-            res[i][j] = open_array[i * k + j]
-    return res
 # these function is used to open a batch of matrices with the same dimension
 async def batch_matrix_open(ctx, M):
+    global total_communicate_time
     k = len(M[0])
     c = len(M[0][0])
     array = [0 for _ in range(k * c * len(M))]
@@ -99,28 +82,16 @@ async def batch_matrix_open(ctx, M):
         for i in range(k):
             for j in range(c):
                 array[m * k * c + i * k + j] = M[m][i][j]
-    res = [[[0 for _ in range(c)] for _ in range(k)] for _ in range(len(M))]   
+    res = [[[0 for _ in range(c)] for _ in range(k)] for _ in range(len(M))]  
+    start = time.time() 
     open_array  = await ctx.ShareArray(array).open()
+    stop = time.time() 
+    total_communicate_time = total_communicate_time + stop - start
     for m in range(len(M)):
         for i in range(k):
             for j in range(c):
                 res[m][i][j] = open_array[m * k * c + i * k + j]
     return res
-
-
-def matrix_mul_plain_share(ctx, matrix_a, matrix_b):
-    # plain matrix is k*m and share matrix is m*n, output matrix is k*n
-    k = len(matrix_a)
-    m = len(matrix_a[0])
-    n= len(matrix_b[0])
-    output = [[ctx.Share(0) for _ in range(k)]for _ in range(n)]
-    for i in range(k):
-        for j in range(n):
-            for t in range(m):          
-
-                output[i][j] = output[i][j] + matrix_a[i][t] * matrix_b[t][j]
-
-    return output
 
 def matrix_addition(matrix_a, matrix_b):
     m = len(matrix_a)
@@ -152,7 +123,7 @@ def matrix_mul(ctx, matrix_a, matrix_b):
                 output[i][j] = output[i][j] + matrix_a[i][t] * matrix_b[t][j]
     return output
 
-
+# this method support non-square matrices.
 async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     k = len(X)
     m = len(X[0])
@@ -164,87 +135,16 @@ async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     o = await batch_matrix_open(ctx, [D,E])
     D_open = o[0]
     E_open = o[1]
-    res = [[ctx.Share(0) for _ in range(n)]for _ in range(k)]
+    res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]]
 
-    DE = matrix_mul(ctx, D_open, E_open)
-    res = matrix_addition(res, DE)
-    AE = matrix_mul_plain_share(ctx, A, E_open)
-
-    res = matrix_addition(res, AE)
-
-    DB = matrix_mul_plain_share(ctx, D_open, B)
-    res = matrix_addition(res, DB)  
-
-    res = matrix_addition(res, C)
-
-    return res
-
-# this only works when all input matrix have the same dimension
-# also to speed up offline phase, hack is used here, I use the same triples to multiply all X&Y.
-async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
-
-    num_of_matrix = len(X)
-
-    k = len(X[0])
-    m = len(X[0][0])
-    n = len(Y[0][0])
-    D = [0 for _ in range(num_of_matrix)]
-    E = [0 for _ in range(num_of_matrix)]
-    start_open =  time.time()
-    for nn in range(num_of_matrix):
-        # D = X - A
-        D[nn] = [[X[nn][i][j] - A[i][j] for j in range(m)] for i in range(k)]
-        # E = Y - B
-        E[nn] = [[Y[nn][i][j] - B[i][j] for j in range(n)] for i in range(m)]
-
-    o = await batch_matrix_open(ctx, D+E)
-    stop_open =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time for opening (X - A)(Y - B)): {stop_open - start_open}")
-    start2 =  time.time()
-    D_open = [0 for _ in range(num_of_matrix)]
-    E_open = [0 for _ in range(num_of_matrix)]
-    DE = [0 for _ in range(num_of_matrix)]
-    AE = [0 for _ in range(num_of_matrix)]
-    DB = [0 for _ in range(num_of_matrix)]
-    for i in range(num_of_matrix):
-        D_open[i] = o[i]
-    for i in range(num_of_matrix):
-        E_open[i] = o[i + num_of_matrix]
-    stop2 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time for putting open result into correct arrays: {stop2 - start2}")
-
-    res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]for _ in range(num_of_matrix)]
-    start3 =  time.time()
-    DE = await batch_cpp_matrix_mul(ctx, D_open, E_open)
-    stop3 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)(Y-B): {stop3 - start3}")
-    start4 =  time.time()
+    DE = await batch_cpp_matrix_mul(ctx, [D_open], [E_open])
     res = await batch_cpp_matrix_add(ctx, res, DE)
-    stop4 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to add (X-A)(Y-B) into result: {stop4 - start4}")
-
-    start5 =  time.time()
-    AE = await batch_cpp_matrix_mul(ctx, [A for _ in range(num_of_matrix)], E_open)
-    stop5 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to compute A(Y-B): {stop5 - start5}")
-    start6 =  time.time()
+    AE = await batch_cpp_matrix_mul(ctx, [A], [E_open])
     res = await batch_cpp_matrix_add(ctx, res, AE)
-    stop6 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to add A(Y-B) into result: {stop6 - start6}")
+    DB = await batch_cpp_matrix_mul(ctx, [D_open], [B])
+    res = await batch_cpp_matrix_add(ctx, res, DB)  
+    res = await batch_cpp_matrix_add(ctx, res, [C])
 
-    start7 =  time.time()   
-    DB = await batch_cpp_matrix_mul(ctx, D_open, [B for _ in range(num_of_matrix)])
-    stop7 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)B: {stop7 - start7}")
-
-
-    start8 =  time.time()   
-
-
-    res = await batch_cpp_matrix_add(ctx, res, DB)
-    res = await batch_cpp_matrix_add(ctx, res, [C for _ in range(num_of_matrix)])
-    stop8 =  time.time()
-    logging.info(f"Inside batch beaver matrix mul: time to add (X-A)B and AB into result(2 addition): {stop8 - start8}")
     return res
 
 
@@ -289,8 +189,95 @@ async def beaver_mul_three_matrix(ctx, X, Y, Z):
 
     res = matrix_addition(res, D)
     return res
-# batch method only support square matrices.
+
+def matrix_mul_plain_share(ctx, matrix_a, matrix_b):
+    # plain matrix is k*m and share matrix is m*n, output matrix is k*n
+    k = len(matrix_a)
+    m = len(matrix_a[0])
+    n= len(matrix_b[0])
+    output = [[ctx.Share(0) for _ in range(k)]for _ in range(n)]
+    for i in range(k):
+        for j in range(n):
+            for t in range(m):          
+
+                output[i][j] = output[i][j] + matrix_a[i][t] * matrix_b[t][j]
+
+    return output
+# this only works when all input matrix have the same dimension
+# also to speed up offline phase, hack is used here, I use the same triples to multiply all X&Y.
+async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
+
+    num_of_matrix = len(X)
+
+    k = len(X[0])
+    m = len(X[0][0])
+    n = len(Y[0][0])
+    D = [0 for _ in range(num_of_matrix)]
+    E = [0 for _ in range(num_of_matrix)]
+
+    for nn in range(num_of_matrix):
+        # D = X - A
+        D[nn] = [[X[nn][i][j] - A[i][j] for j in range(m)] for i in range(k)]
+        # E = Y - B
+        E[nn] = [[Y[nn][i][j] - B[i][j] for j in range(n)] for i in range(m)]
+    start_open =  time.time()
+    o = await batch_matrix_open(ctx, D+E)
+    stop_open =  time.time()
+    logging.info(f"Inside batch beaver matrix mul: time for opening (X - A)(Y - B)): {stop_open - start_open}")
+
+    D_open = [0 for _ in range(num_of_matrix)]
+    E_open = [0 for _ in range(num_of_matrix)]
+    DE = [0 for _ in range(num_of_matrix)]
+    AE = [0 for _ in range(num_of_matrix)]
+    DB = [0 for _ in range(num_of_matrix)]
+    for i in range(num_of_matrix):
+        D_open[i] = o[i]
+    for i in range(num_of_matrix):
+        E_open[i] = o[i + num_of_matrix]
+
+    res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]for _ in range(num_of_matrix)]
+    # start3 =  time.time()
+    DE = await batch_cpp_matrix_mul(ctx, D_open, E_open)
+    # stop3 =  time.time()
+    # logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)(Y-B): {stop3 - start3}")
+    # start4 =  time.time()
+    res = await batch_cpp_matrix_add(ctx, res, DE)
+    # stop4 =  time.time()
+    # logging.info(f"Inside batch beaver matrix mul: time to add (X-A)(Y-B) into result: {stop4 - start4}")
+
+    # start5 =  time.time()
+    AE = await batch_cpp_matrix_mul(ctx, [A for _ in range(num_of_matrix)], E_open)
+    # stop5 =  time.time()
+    # logging.info(f"Inside batch beaver matrix mul: time to compute A(Y-B): {stop5 - start5}")
+    # start6 =  time.time()
+    res = await batch_cpp_matrix_add(ctx, res, AE)
+    # stop6 =  time.time()
+    # logging.info(f"Inside batch beaver matrix mul: time to add A(Y-B) into result: {stop6 - start6}")
+
+    # start7 =  time.time()   
+    DB = await batch_cpp_matrix_mul(ctx, D_open, [B for _ in range(num_of_matrix)])
+    # stop7 =  time.time()
+    # logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)B: {stop7 - start7}")
+
+
+    start8 =  time.time()   
+
+
+    res = await batch_cpp_matrix_add(ctx, res, DB)
+    res = await batch_cpp_matrix_add(ctx, res, [C for _ in range(num_of_matrix)])
+    stop8 =  time.time()
+    logging.info(f"Inside batch beaver matrix mul: time to add (X-A)B and AB into result(2 addition): {stop8 - start8}")
+    return res
 async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
+    num_of_matrix = len(X)
+    A = normal_triple[0]
+    B = normal_triple[1]
+    C = normal_triple[2]
+    res = await batch_beaver_mul_matrix(ctx, X, Y, A, B, C)
+    res = await batch_beaver_mul_matrix(ctx, res, Z, A, B, C)
+    return res
+# batch method only support square matrices.
+async def backup_batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
     num_of_matrix = len(X)
     k = len(X[0])
     m = len(X[0][0])
@@ -358,16 +345,12 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     startt5 = time.time()  
     for nn in range(num_of_matrix):
         BZ[nn] = o[0 + 3 * nn]
+        AY[nn] = o[1 + 3 * nn]
+        X_Y_minus_B_C[nn] = o[2 + 3 * nn]
 
     X_minus_A_BZ = await batch_cpp_matrix_mul(ctx, X_minus_A_open , BZ)
-
-    for nn in range(num_of_matrix):
-        res[nn] = matrix_addition(res[nn], X_minus_A_BZ[nn])
-        AY[nn] = o[1 + 3 * nn]
-
+    res = await batch_cpp_matrix_add(ctx, res, X_minus_A_BZ)
     AY_Z_minus_C = await batch_cpp_matrix_mul(ctx, AY , Z_minus_C_open)
-    for nn in range(num_of_matrix):
-        X_Y_minus_B_C[nn] = o[2 + 3 * nn]
 
     res = await batch_cpp_matrix_add(ctx, res, AY_Z_minus_C)
     res = await batch_cpp_matrix_add(ctx, res, X_Y_minus_B_C)
@@ -376,71 +359,6 @@ async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_
     logging.info(f"time for computing all share matrices and opened matrices(part 2): {stopt5 - startt5}")
     return res
 
-
-async def beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
-    k = len(X)
-    m = len(X[0])
-    n = len(Y[0])
-    q = len(Z[0])
-    A = super_triple[0]
-    B = super_triple[1]
-    C = super_triple[2]
-    D = super_triple[3]
-
-    X_minus_A = [[X[i][j] - A[i][j] for j in range(m)] for i in range(k)]
-    Y_minus_B = [[Y[i][j] - B[i][j] for j in range(n)] for i in range(m)]
-    Z_minus_C = [[Z[i][j] - C[i][j] for j in range(q)] for i in range(n)]
-    batch = [X_minus_A, Y_minus_B, Z_minus_C]
-    o = await batch_matrix_open(ctx, batch)
-    X_minus_A_open = o[0]
-    Y_minus_B_open = o[1]
-    Z_minus_C_open = o[2]
-
-    res = [[ctx.Share(0) for _ in range(q)] for _ in range(k)]
-
-    # E = (X-A)(Y-B) F = (X-A)(Y-B)(Z-C)
-    E = matrix_mul(ctx, X_minus_A_open, Y_minus_B_open)
-    F = matrix_mul(ctx, E, Z_minus_C_open)
-    res = matrix_addition(res, F)
-    # To save testing time I use hacked trick here, I use the same beaver triples to do 3 multiplication
-    A2 = normal_triple[0]
-    B2 = normal_triple[1]
-    C2 = normal_triple[2]
-
-    # batch method starting from here
-    X_Y_minus_B = matrix_mul(ctx, X , Y_minus_B_open)
-    batch_X = [B,A,X_Y_minus_B]
-    batch_Y = [Z,Y,C]
-    o = await batch_beaver_mul_matrix(ctx, batch_X, batch_Y, A2, B2, C2)
-    BZ = o[0]
-    X_minus_A_BZ = matrix_mul(ctx, X_minus_A_open , BZ)
-    res = matrix_addition(res, X_minus_A_BZ)
-    AY = o[1]
-    AY_Z_minus_C = matrix_mul(ctx, AY , Z_minus_C_open)
-    res = matrix_addition(res, AY_Z_minus_C)
-    X_Y_minus_B_C = o[2]
-    res = matrix_addition(res, X_Y_minus_B_C)
-
-    res = matrix_addition(res, D)
-    return res
-
-    # origin method without batching
-    # BZ = await beaver_mul_matrix(ctx, B, Z, A2, B2, C2)
-
-    # X_minus_A_BZ = matrix_mul(ctx, X_minus_A_open , BZ)
-    # res = matrix_addition(res, X_minus_A_BZ)
-
-    # # A2,B2,C2 = Precompute_hack(k)
-    # AY = await beaver_mul_matrix(ctx, A, Y, A2, B2, C2)
-    # AY_Z_minus_C = matrix_mul(ctx, AY , Z_minus_C_open)
-    # res = matrix_addition(res, AY_Z_minus_C)
-    # # calculate X(Y - B)C
-    # X_Y_minus_B = matrix_mul(ctx, X , Y_minus_B_open)
-    # X_Y_minus_B_C = await beaver_mul_matrix(ctx, X_Y_minus_B, C, A2, B2, C2)
-    # res = matrix_addition(res, X_Y_minus_B_C)
-
-    # res = matrix_addition(res, D)
-    # return res
 
 # codes for calculating matrix inverse
 def determinant(A, total=0):
@@ -596,24 +514,8 @@ async def run_command_sync(command):
     if len(stderr):
         logging.info(f"Error: {stderr}")
 
-async def cpp_mul(node_id, rounds, index):
-    input_file_name1 = f"sharedata/matrix_{node_id}_{rounds}_{2 * index}.input"
-    input_file_name2 = f"sharedata/matrix_{node_id}_{rounds}_{2 * index + 1}.input"
-    output_file_name = f"sharedata/output_{node_id}_{rounds}_{index}"
-
-    runcmd = f"./apps/tutorial/cpp/matrix_mul {input_file_name1} {input_file_name2} {output_file_name}"
-    await run_command_sync(runcmd)
-
-async def cpp_mul_with_name(A, B, C):
-
-    runcmd = f"./apps/tutorial/cpp/matrix_mul {A} {B} {C}"
-    await run_command_sync(runcmd)
-
-
-
-
 async def batch_cpp_matrix_mul(ctx, A, B):
-
+    global total_compute_time
     num_of_batch = len(A)
     # honeybadgermpc.field.GFElement
     A_type = (type(A[0][0][0]) == GFElement)
@@ -621,10 +523,10 @@ async def batch_cpp_matrix_mul(ctx, A, B):
 
     result = [[[0 for _ in range(len(A[0][0]))] for _ in range(len(A[0]))] for _ in range(num_of_batch)]
     # write matrices A  into files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_A_{i}.input"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "w") as f:
+    file_name = f"matrix_{ctx.myid}_A.input"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "w") as f:
+        for i in range(num_of_batch):        
             print(ctx.field.modulus, file=f)
             print(len(A[i]), file=f)
             print(len(A[i][0]), file=f)
@@ -637,10 +539,10 @@ async def batch_cpp_matrix_mul(ctx, A, B):
                     for jj in range(len(A[i][0])):
                         print(A[i][ii][jj].v.value, file=f)
     # write matrices B into files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_B_{i}.input"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "w") as f:
+    file_name = f"matrix_{ctx.myid}_B.input"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "w") as f:
+        for i in range(num_of_batch):
             print(ctx.field.modulus, file=f)
             print(len(B[i]), file=f)
             print(len(B[i][0]), file=f)
@@ -653,18 +555,22 @@ async def batch_cpp_matrix_mul(ctx, A, B):
                     for jj in range(len(B[i][0])):
                         print(B[i][ii][jj].v.value, file=f)  
     # do computation
-    start = time.time()
-    pool = TaskPool(256)
-    for i in range(num_of_batch):
-        pool.submit(cpp_mul_with_name(f"sharedata/matrix_{ctx.myid}_A_{i}.input", f"sharedata/matrix_{ctx.myid}_B_{i}.input", f"sharedata/matrix_{ctx.myid}_C_{i}.output"))
-    await pool.close()
-    stop = time.time()
-    logging.info(f"Batch_cpp_mul, pure CPP time: { stop - start }")
+    runcmd = f"./apps/tutorial/cpp/multi_matrix_mul {num_of_batch} {ctx.myid} {MODE}"
+    await run_command_sync(runcmd)
+
+    # read C++ benchmark
+    file_name = f"benchmark_mul.log"
+    file_path = f"sharedata/{file_name}"
+    cpp_time = 0;
+    with open(file_path, "r") as f:
+        cpp_time = f.readline()
+    # logging.info(f"Batch_cpp_mul, pure computation time each call: {cpp_time}")
+    total_compute_time = total_compute_time + float(cpp_time)
     #load result from files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_C_{i}.output"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "r") as f:
+    file_name = f"matrix_{ctx.myid}_C.output"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "r") as f:
+        for i in range(num_of_batch):
             assert ctx.field.modulus == int(f.readline())
             row = int(f.readline())
             column = int(f.readline())
@@ -678,13 +584,8 @@ async def batch_cpp_matrix_mul(ctx, A, B):
                         result[i][r][c] = ctx.Share(int(f.readline()))                
     return result
 
-async def cpp_add_with_name(A, B, C):
-
-    runcmd = f"./apps/tutorial/cpp/matrix_add {A} {B} {C}"
-    await run_command_sync(runcmd)
-
 async def batch_cpp_matrix_add(ctx, A, B):
-
+    global total_compute_time
     num_of_batch = len(A)
     # honeybadgermpc.field.GFElement
     A_type = (type(A[0][0][0]) == GFElement)
@@ -692,10 +593,10 @@ async def batch_cpp_matrix_add(ctx, A, B):
 
     result = [[[0 for _ in range(len(A[0][0]))] for _ in range(len(A[0]))] for _ in range(num_of_batch)]
     # write matrices A  into files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_A_{i}.input"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "w") as f:
+    file_name = f"matrix_{ctx.myid}_A.input"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "w") as f:
+        for i in range(num_of_batch):        
             print(ctx.field.modulus, file=f)
             print(len(A[i]), file=f)
             print(len(A[i][0]), file=f)
@@ -708,10 +609,10 @@ async def batch_cpp_matrix_add(ctx, A, B):
                     for jj in range(len(A[i][0])):
                         print(A[i][ii][jj].v.value, file=f)
     # write matrices B into files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_B_{i}.input"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "w") as f:
+    file_name = f"matrix_{ctx.myid}_B.input"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "w") as f:
+        for i in range(num_of_batch):
             print(ctx.field.modulus, file=f)
             print(len(B[i]), file=f)
             print(len(B[i][0]), file=f)
@@ -724,18 +625,24 @@ async def batch_cpp_matrix_add(ctx, A, B):
                     for jj in range(len(B[i][0])):
                         print(B[i][ii][jj].v.value, file=f)  
     # do computation
-    start = time.time()
-    pool = TaskPool(256)
-    for i in range(num_of_batch):
-        pool.submit(cpp_add_with_name(f"sharedata/matrix_{ctx.myid}_A_{i}.input", f"sharedata/matrix_{ctx.myid}_B_{i}.input", f"sharedata/matrix_{ctx.myid}_C_{i}.output"))
-    await pool.close()
-    stop = time.time()
-    logging.info(f"Batch_cpp_add, pure CPP time: { stop - start }")
+    runcmd = f"./apps/tutorial/cpp/multi_matrix_add {num_of_batch} {ctx.myid} {MODE}"
+    await run_command_sync(runcmd)
+
+    # read C++ benchmark
+    file_name = f"benchmark_add.log"
+    file_path = f"sharedata/{file_name}"
+    cpp_time = 0;
+    with open(file_path, "r") as f:
+        cpp_time = f.readline()
+    # logging.info(f"Batch_cpp_add, pure CPP time: {cpp_time}")
+    total_compute_time = total_compute_time + float(cpp_time)
+
+
     #load result from files
-    for i in range(num_of_batch):
-        file_name = f"matrix_{ctx.myid}_C_{i}.output"
-        file_path = f"sharedata/{file_name}"
-        with open(file_path, "r") as f:
+    file_name = f"matrix_{ctx.myid}_C.output"
+    file_path = f"sharedata/{file_name}"
+    with open(file_path, "r") as f:
+        for i in range(num_of_batch):
             assert ctx.field.modulus == int(f.readline())
             row = int(f.readline())
             column = int(f.readline())
@@ -765,84 +672,20 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     triples = await batch_matrix_open(ctx, t)
     stop_open =  time.time()
     logging.info(f"time for opening R_iX_iR_(i+1)^(-1): {start_open - stop_open}")
-    # version 1: single threadW
-    # result = triples[0]
-    # for i in range(1, len(M)):
-    #     result = matrix_mul(ctx, result, triples[i])
 
-    # version 2: parallel version
     startt = time.time()
     temp = len(triples)
     for it in range(int(math.log(len(M), 2))):
-        # write matrices into files
-        for i in range(temp):
-            file_name = f"matrix_{ctx.myid}_{it}_{i}.input"
-            file_path = f"sharedata/{file_name}"
-            with open(file_path, "w") as f:
-                print(ctx.field.modulus, file=f)
-                print(len(triples[i]), file=f)
-                print(len(triples[i][0]), file=f)
-                for ii in range(len(triples[i])):
-                    for jj in range(len(triples[i][0])):
-                        print(triples[i][ii][jj].value, file=f)
-        temp = int(temp / 2)
-        # run cpp codes to do local matrix mul
-        pool = TaskPool(256)
-        for i in range(temp):
-            pool.submit(cpp_mul(ctx.myid, it, i))
-        await pool.close()
-
-        # read cpp output from files
-        for i in range(temp):
-            file_name = f"output_{ctx.myid}_{it}_{i}"
-            file_path = f"sharedata/{file_name}"
-            with open(file_path, "r") as f:
-                assert ctx.field.modulus == int(f.readline())
-                row = int(f.readline())
-                column = int(f.readline())
-                for r in range(row):
-                    for c in range(column):
-                        triples[i][r][c] = ctx.field(int(f.readline()))
+        result = await batch_cpp_matrix_mul(ctx, triples[::2], triples[1::2])
+        triples = result
     stopt = time.time()
     last_time = stopt - startt
-    logging.info(f"local computation time: {last_time}")
+    logging.info(f"time for multiplying all opened R_iX_iR_(i+1)^(-1): {last_time}")
     result = triples[0]
 
 
     result = matrix_mul(ctx, R_inverse[0], result)
     # Note: this can also be moved outside. TBD
-    A, B, C = generate_beaver_matrix_hack(ctx, len(M[0]), len(M[0]), len(M[0]))
-    result = await beaver_mul_matrix(ctx, result, R[-1], A, B, C)
-
-    return result
-
-async def multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple):
-
-    if len(M) < 2 or len(R) < 2 or len(M) != (len(R) - 1) or len(R_inverse) != len(R):
-        return None
-    # Notice: trick used here to save time, correct code should be len(normal_triple) != 9 * len(M)
-    if len(super_triple) != 4 * len(M) or len(normal_triple) != 3 * len(M):
-        return None
-    triple_secret = []
-    start = time.time()
-    # triples = []
-    for i in range(len(M)):
-        t = await beaver_mul_three_matrix_with_precomputation(ctx, R[i], M[i], R_inverse[i + 1], super_triple[4 * i: 4 * i + 4], normal_triple[3 * i: 3 * i + 3])
-        triple_secret.append(t)
-        # t_reveal = await matrix_open(ctx, t)
-        # triples.append(t_reveal)
-    triples = await batch_matrix_open(ctx, triple_secret)
-    # version 1: single threadW
-    result = triples[0]
-    for i in range(1, len(M)):
-        result = matrix_mul(ctx, result, triples[i])
-    result = matrix_mul(ctx, R_inverse[0], result)
- 
-
-    logging.info(f"{p1 - start}")
-    logging.info(f"{p2 - p1}")
-    logging.info(f"{p3 - p2}")
-    logging.info(f"{p4 - p3}")
     A, B, C = generate_beaver_matrix_hack(ctx, len(M[0]), len(M[0]), len(M[0]))
     result = await beaver_mul_matrix(ctx, result, R[-1], A, B, C)
 
@@ -867,9 +710,19 @@ def triple_generation_for_multi_matrix(ctx, k, n):
 
     return super_triple, normal_triple
 
-async def simple_matrix(ctx, **kwargs):
+async def test(ctx, **kwargs):
     k = kwargs["k"]
-    n = 16
+    n = 64
+    matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
+
+    res = await cpp_matrix_mul(ctx, [matrix_a for _ in range(n)], [matrix_a for _ in range(n)])
+    return res
+
+async def simple_matrix(ctx, **kwargs):
+    global total_compute_time
+    global total_communicate_time
+    k = kwargs["k"]
+    n = 128
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/matrix_add")
@@ -882,34 +735,11 @@ async def simple_matrix(ctx, **kwargs):
     res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
     stop = time.time()
     last_time = stop - start
-    # res_open = await matrix_open(ctx, res)
-    # logging.info(f"{res_open}")
-    logging.info(f"{last_time}")
+
+    logging.info(f"actual last time:{last_time}")
+    logging.info(f"pure computation time:{total_compute_time}")
+    logging.info(f"pure communication time{total_communicate_time}")
     return res
-
-async def triple_matrix(ctx, **kwargs):
-    k = kwargs["k"]
-    matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
-
-    # matrix_b = [[ctx.preproc.get_rand(ctx).v for _ in range(k)] for _ in range(k)]
-    matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
-    matrix_c = [[ctx.Share(7) for _ in range(k)] for _ in range(k)]
-    A1,B1,C1 = generate_beaver_matrix_hack(ctx, k, k, k)
-    A,B,C,D = generate_beaver_triple_matrix_hack(ctx, k, k, k,k)
-    start = time.time()
-    result = await beaver_mul_three_matrix_with_precomputation(ctx, matrix_a, matrix_b, matrix_c, [A,B,C,D],[A1,B1,C1])
-    stop = time.time()
-    last_time = stop - start
-    logging.info(f"{last_time}")
-    # result = await beaver_mul_three_matrix(ctx, matrix_a, matrix_b, matrix_c)
-    #result = matrix_mul_plain_share(ctx, matrix_a, matrix_b, k, k, k)
-    for i in range(k):
-        res_list = ctx.ShareArray(result[i])
-        opened_values = await res_list.open()
-        logging.info(f"[{ctx.myid}] {opened_values}")
-    # logging.info(f"{result}")
-    return result
-
 
 async def _run(peers, n, t, my_id, k):
     from honeybadgermpc.ipc import ProcessProgramRunner
@@ -937,7 +767,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k =80
+    k =3
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
