@@ -803,7 +803,7 @@ async def simple_matrix(ctx, **kwargs):
     global total_mul_time
     global total_communicate_time
     k = kwargs["k"]
-    n = 64
+    n = 16
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
@@ -852,7 +852,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k = 10
+    k = 20
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
