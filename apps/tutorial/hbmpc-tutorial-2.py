@@ -19,7 +19,7 @@ mpc_config = {
     MixinConstants.MultiplyShareArray: BeaverMultiplyArrays(),
     MixinConstants.MultiplyShare: BeaverMultiply(),
 }
-random.seed(562)
+random.seed(5622)
 # non multi threading if MODE = 0
 MODE = 1 
 total_add_time = 0
