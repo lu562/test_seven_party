@@ -764,7 +764,7 @@ async def simple_matrix(ctx, **kwargs):
     global total_mul_time
     global total_communicate_time
     k = kwargs["k"]
-    n = 32
+    n = 64
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
