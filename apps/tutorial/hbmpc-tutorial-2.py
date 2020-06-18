@@ -777,7 +777,7 @@ async def simple_matrix(ctx, **kwargs):
         M.append(matrix_a)
     start = time.time()
     # res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
-    res = await state_of_art_mul(ctx, M, normal_triple):
+    res = await state_of_art_mul(ctx, M, normal_triple)
     stop = time.time()
     last_time = stop - start
 
