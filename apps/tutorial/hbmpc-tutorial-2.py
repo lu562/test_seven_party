@@ -1,12 +1,3 @@
-"""
-hbMPC tutorial 2.
-
-Instructions:
-   run this with
-```
-scripts/launch-tmuxlocal.sh apps/tutorial/hbmpc-tutorial-2.py conf/mpc/local
-```
-"""
 import asyncio
 import logging
 import random
@@ -24,18 +15,16 @@ from honeybadgermpc.progs.mixins.share_arithmetic import (
     BeaverMultiplyArrays,
     MixinConstants,
 )
-
 mpc_config = {
     MixinConstants.MultiplyShareArray: BeaverMultiplyArrays(),
     MixinConstants.MultiplyShare: BeaverMultiply(),
 }
-random.seed(5622)
+random.seed(562)
 # non multi threading if MODE = 0
 MODE = 1 
 total_add_time = 0
 total_mul_time = 0
 total_communicate_time = 0
-
 
 def generate_beaver_matrix_hack(ctx, k, m, n):
     A_hack = [[i + j for j in range(m)] for i in range(k)]
@@ -131,10 +120,6 @@ async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     n = len(Y[0])
     D = await batch_cpp_matrix_sub(ctx, [X], [A])
     E = await batch_cpp_matrix_sub(ctx, [Y], [B])
-    # # D = X - A
-    # D = [[X[i][j] - A[i][j] for j in range(m)] for i in range(k)]
-    # # E = Y - B
-    # E = [[Y[i][j] - B[i][j] for j in range(n)] for i in range(m)]
     o = await batch_matrix_open(ctx, [D[0],E[0]])
     D_open = o[0]
     E_open = o[1]
@@ -149,7 +134,6 @@ async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     res = await batch_cpp_matrix_add(ctx, res, [C])
 
     return res
-
 
 async def beaver_mul_three_matrix(ctx, X, Y, Z):
     k = len(X)
@@ -206,24 +190,19 @@ def matrix_mul_plain_share(ctx, matrix_a, matrix_b):
                 output[i][j] = output[i][j] + matrix_a[i][t] * matrix_b[t][j]
 
     return output
+
 # this only works when all input matrix have the same dimension
 # also to speed up offline phase, hack is used here, I use the same triples to multiply all X&Y.
 async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
 
     num_of_matrix = len(X)
-
     k = len(X[0])
     m = len(X[0][0])
     n = len(Y[0][0])
-    # D = [0 for _ in range(num_of_matrix)]
-    # E = [0 for _ in range(num_of_matrix)]
+
     D = await batch_cpp_matrix_sub(ctx, X, [A for _ in range(num_of_matrix)])
     E = await batch_cpp_matrix_sub(ctx, Y, [B for _ in range(num_of_matrix)])
-    # for nn in range(num_of_matrix):
-    #     # D = X - A
-    #     D[nn] = [[X[nn][i][j] - A[i][j] for j in range(m)] for i in range(k)]
-    #     # E = Y - B
-    #     E[nn] = [[Y[nn][i][j] - B[i][j] for j in range(n)] for i in range(m)]
+
     start_open =  time.time()
     o = await batch_matrix_open(ctx, D+E)
     stop_open =  time.time()
@@ -240,49 +219,28 @@ async def batch_beaver_mul_matrix(ctx, X, Y, A, B, C):
         E_open[i] = o[i + num_of_matrix]
 
     res = [[[ctx.Share(0) for _ in range(n)]for _ in range(k)]for _ in range(num_of_matrix)]
-    # start3 =  time.time()
     DE = await batch_cpp_matrix_mul(ctx, D_open, E_open)
-    # stop3 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)(Y-B): {stop3 - start3}")
-    # start4 =  time.time()
     res = await batch_cpp_matrix_add(ctx, res, DE)
-    # stop4 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to add (X-A)(Y-B) into result: {stop4 - start4}")
-
-    # start5 =  time.time()
     AE = await batch_cpp_matrix_mul(ctx, [A for _ in range(num_of_matrix)], E_open)
-    # stop5 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to compute A(Y-B): {stop5 - start5}")
-    # start6 =  time.time()
-    res = await batch_cpp_matrix_add(ctx, res, AE)
-    # stop6 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to add A(Y-B) into result: {stop6 - start6}")
-
-    # start7 =  time.time()   
+    res = await batch_cpp_matrix_add(ctx, res, AE) 
     DB = await batch_cpp_matrix_mul(ctx, D_open, [B for _ in range(num_of_matrix)])
-    # stop7 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to compute (X-A)B: {stop7 - start7}")
-
-
-    # start8 =  time.time()   
-
-
     res = await batch_cpp_matrix_add(ctx, res, DB)
     res = await batch_cpp_matrix_add(ctx, res, [C for _ in range(num_of_matrix)])
-    # stop8 =  time.time()
-    # logging.info(f"Inside batch beaver matrix mul: time to add (X-A)B and AB into result(2 addition): {stop8 - start8}")
     return res
+
 async def batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
     num_of_matrix = len(X)
     A = normal_triple[0]
     B = normal_triple[1]
     C = normal_triple[2]
+
     start =  time.time() 
     res = await batch_beaver_mul_matrix(ctx, X, Y, A, B, C)
     res = await batch_beaver_mul_matrix(ctx, res, Z, A, B, C)
     stop =  time.time() 
     logging.info(f"actual time to run 2 beaver matrix mul: {stop - start}")
     return res
+
 # batch method only support square matrices.
 async def backup_batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z, super_triple, normal_triple):
     num_of_matrix = len(X)
@@ -326,7 +284,6 @@ async def backup_batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z,
     F = await batch_cpp_matrix_mul(ctx, E, Z_minus_C_open)
     X_Y_minus_B = await batch_cpp_matrix_mul(ctx, X , Y_minus_B_open)
 
-
     stopt3 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(3 mul): { stopt3 - startt3 }")
     startt33 = time.time()
@@ -365,7 +322,6 @@ async def backup_batch_beaver_mul_three_matrix_with_precomputation(ctx, X, Y, Z,
     stopt5 = time.time()
     logging.info(f"time for computing all share matrices and opened matrices(part 2): {stopt5 - startt5}")
     return res
-
 
 # codes for calculating matrix inverse
 def determinant(A, total=0):
@@ -469,7 +425,6 @@ def invert_matrix(A, tol=None):
     AM = copy_matrix(A)
     I = identity_matrix(n)
     IM = copy_matrix(I)
-
     # Section 3: Perform row operations
     indices = list(range(n)) # to allow flexible row referencing ***
     for fd in range(n): # fd stands for focus diagonal
@@ -486,8 +441,6 @@ def invert_matrix(A, tol=None):
                 IM[i][j] = IM[i][j] - crScaler * IM[fd][j]
     return IM
 
-
-
 # Codes about multiplying arbitrary number of matrices
 
 def matrix_inverse_hack(ctx, k):
@@ -499,11 +452,9 @@ def matrix_inverse_hack(ctx, k):
     A_inverse = [[ctx.Share(A_inverse_hack[i][j]) for j in range(k)] for i in range(k)]
     return A, A_inverse
 
-
 def offline_multi_matrix_multiply(ctx, k, n):
     R = []
     R_inverse = []
-
     for i in range(n + 1):
         a, a_inverse = matrix_inverse_hack(ctx, k)
         R.append(a)
@@ -573,7 +524,7 @@ async def batch_cpp_matrix_mul(ctx, A, B):
         cpp_time = f.readline()
     # logging.info(f"Batch_cpp_mul, pure computation time each call: {cpp_time}")
     total_mul_time = total_mul_time + float(cpp_time)
-    # logging.info(f"mul time now:: {total_mul_time}")
+    logging.info(f"mul time now:: {total_mul_time}")
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
     file_path = f"sharedata/{file_name}"
@@ -644,7 +595,7 @@ async def batch_cpp_matrix_add(ctx, A, B):
         cpp_time = f.readline()
 
     total_add_time = total_add_time + float(cpp_time)
-    # logging.info(f"add time now:: {total_add_time}")
+    logging.info(f"add time now:: {total_add_time}")
 
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
@@ -717,7 +668,6 @@ async def batch_cpp_matrix_sub(ctx, A, B):
     # # logging.info(f"Batch_cpp_add, pure CPP time: {cpp_time}")
     # total_add_time = total_add_time + float(cpp_time)
 
-
     #load result from files
     file_name = f"matrix_{ctx.myid}_C.output"
     file_path = f"sharedata/{file_name}"
@@ -761,7 +711,6 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     logging.info(f"time for multiplying all R_iX_iR_(i+1)^(-1): {last_time}")
     result = triples[0]
 
-
     result = matrix_mul(ctx, R_inverse[0], result)
     # Note: this can also be moved outside. TBD
     # A, B, C = generate_beaver_matrix_hack(ctx, len(M[0]), len(M[0]), len(M[0]))
@@ -770,6 +719,18 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     stopf = time.time()
     logging.info(f"time to compute [R_0^(-1)]result_of_mul[R_n]: {stopf - startf}")
     return result
+
+# multiply n matrices by using only beaver matrice mul. Thies leads to a log(n) round complexity. n has to be power of 2.
+# trick used here, normal_triple includes only 1 triple that is used for all multiplication. This is only for saving testing time. Don;t do it in reality.
+async def state_of_art_mul(ctx, M, normal_triple):
+    num_of_matrix = len(M)
+    if num_of_matrix < 2:
+        return None
+    result = M
+    # tricks: same super triple used for all multiplications
+    for it in range(int(math.log(num_of_matrix, 2))):
+        result = await batch_beaver_mul_matrix(ctx, result[::2], result[1::2], normal_triple[0], normal_triple[1], normal_triple[2])
+    return result[0]
 
 def triple_generation_for_multi_matrix(ctx, k, n):
     super_triple = []
@@ -803,7 +764,7 @@ async def simple_matrix(ctx, **kwargs):
     global total_mul_time
     global total_communicate_time
     k = kwargs["k"]
-    n = 4
+    n = 8
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
@@ -815,10 +776,10 @@ async def simple_matrix(ctx, **kwargs):
     for _ in range(n):
         M.append(matrix_a)
     start = time.time()
-    res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
+    # res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
+    res = await state_of_art_mul(ctx, M, normal_triple):
     stop = time.time()
     last_time = stop - start
-
 
     logging.info(f"total local add time:{total_add_time}")
     logging.info(f"total local mul time:{total_mul_time}")
@@ -833,7 +794,6 @@ async def _run(peers, n, t, my_id, k):
         await runner.execute("0", simple_matrix, k=k)
         bytes_sent = runner.node_communicator.bytes_sent
         print(f"[{my_id}] Total bytes sent out: {bytes_sent}")
-
 
 if __name__ == "__main__":
     from honeybadgermpc.config import HbmpcConfig
@@ -852,7 +812,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k = 320
+    k = 3
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
