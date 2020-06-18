@@ -691,8 +691,8 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     if len(M) < 2 or len(R) < 2 or len(M) != (len(R) - 1) or len(R_inverse) != len(R):
         return None
     # Notice: trick used here to save time, correct code should be len(normal_triple) != 9 * len(M)
-    if len(super_triple) != 4 * len(M) or len(normal_triple) != 3 * len(M):
-        return None
+    # if len(super_triple) != 4 * len(M) or len(normal_triple) != 3 * len(M):
+    #     return None
     # tricks: same super triple used for all multiplications
     # multiply all R_iX_iR_(i+1)^(-1)
     t = await batch_beaver_mul_three_matrix_with_precomputation(ctx, R[:-1], M, R_inverse[1:], super_triple[0:4], normal_triple[0:3])
@@ -711,7 +711,8 @@ async def batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, su
     logging.info(f"time for multiplying all R_iX_iR_(i+1)^(-1): {last_time}")
     result = triples[0]
 
-    result = matrix_mul(ctx, R_inverse[0], result)
+    result = await batch_cpp_matrix_mul(ctx, [R_inverse[0]], [result]) 
+    result = result[0]
     # Note: this can also be moved outside. TBD
     # A, B, C = generate_beaver_matrix_hack(ctx, len(M[0]), len(M[0]), len(M[0]))
     startf = time.time()
@@ -735,15 +736,15 @@ async def state_of_art_mul(ctx, M, normal_triple):
 def triple_generation_for_multi_matrix(ctx, k, n):
     super_triple = []
     normal_triple = []
-
-    for i in range(n):
+    # hack used here
+    for i in range(1):
         A,B,C,D = generate_beaver_triple_matrix_hack(ctx, k, k, k, k)
         super_triple.append(A)
         super_triple.append(B)
         super_triple.append(C)
         super_triple.append(D)
     # hack here
-    for i in range(n):
+    for i in range(1):
         A, B, C = generate_beaver_matrix_hack(ctx, k, k, k)
         normal_triple.append(A)
         normal_triple.append(B)
@@ -764,7 +765,7 @@ async def simple_matrix(ctx, **kwargs):
     global total_mul_time
     global total_communicate_time
     k = kwargs["k"]
-    n = 64
+    n = 32
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
@@ -776,8 +777,8 @@ async def simple_matrix(ctx, **kwargs):
     for _ in range(n):
         M.append(matrix_a)
     start = time.time()
-    # res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
-    res = await state_of_art_mul(ctx, M, normal_triple)
+    res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
+    # res = await state_of_art_mul(ctx, M, normal_triple)
     stop = time.time()
     last_time = stop - start
 
