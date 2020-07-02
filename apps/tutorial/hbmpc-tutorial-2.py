@@ -133,7 +133,7 @@ async def beaver_mul_matrix(ctx, X, Y, A, B, C):
     res = await batch_cpp_matrix_add(ctx, res, DB)  
     res = await batch_cpp_matrix_add(ctx, res, [C])
 
-    return res
+    return res[0]
 
 async def beaver_mul_three_matrix(ctx, X, Y, Z):
     k = len(X)
@@ -627,7 +627,7 @@ async def batch_cpp_matrix_sub(ctx, A, B):
     file_name = f"matrix_{ctx.myid}_A.input"
     file_path = f"sharedata/{file_name}"
     with open(file_path, "w") as f:
-        for i in range(num_of_batch):        
+        for i in range(num_of_batch):      
             print(ctx.field.modulus, file=f)
             print(len(A[i]), file=f)
             print(len(A[i][0]), file=f)
@@ -733,6 +733,29 @@ async def state_of_art_mul(ctx, M, normal_triple):
         result = await batch_beaver_mul_matrix(ctx, result[::2], result[1::2], normal_triple[0], normal_triple[1], normal_triple[2])
     return result[0]
 
+
+async def matrix_power(ctx, M, p, R, R_inv, normal_triple):
+    triple = await batch_beaver_mul_three_matrix_with_precomputation(ctx, [R], [M], [R_inv], [], normal_triple)
+    open_triple = await batch_matrix_open(ctx, triple)
+
+    # tricks: same super triple used for all multiplications
+    for it in range(int(math.log(p, 2))):
+        open_triple = await batch_cpp_matrix_mul(ctx, open_triple, open_triple)
+
+    result = await batch_cpp_matrix_mul(ctx, [R_inv], open_triple)   
+    result = await beaver_mul_matrix(ctx, result[0], R, normal_triple[0], normal_triple[1], normal_triple[2])     
+    return result
+
+
+
+async def state_of_art_power(ctx, M, p, normal_triple):
+    result = M
+    # tricks: same super triple used for all multiplications
+    for it in range(int(math.log(p, 2))):
+        result = await beaver_mul_matrix(ctx, result, result, normal_triple[0], normal_triple[1], normal_triple[2])
+    return result
+
+
 def triple_generation_for_multi_matrix(ctx, k, n):
     super_triple = []
     normal_triple = []
@@ -765,7 +788,8 @@ async def simple_matrix(ctx, **kwargs):
     global total_mul_time
     global total_communicate_time
     k = kwargs["k"]
-    n = 4
+    n = 1
+    p = 16
     matrix_a = [[ctx.Share(3) for _ in range(k)] for _ in range(k)]
     matrix_b = [[ctx.Share(5) for _ in range(k)] for _ in range(k)]
     await run_command_sync("chmod 777 ./apps/tutorial/cpp/multi_matrix_add")
@@ -777,8 +801,9 @@ async def simple_matrix(ctx, **kwargs):
     for _ in range(n):
         M.append(matrix_a)
     start = time.time()
-    res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
-    # res = await state_of_art_mul(ctx, M, normal_triple)
+    # res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
+    # res = await state_of_art_power(ctx, matrix_a, p, normal_triple)
+    res = await matrix_power(ctx, matrix_a, p, R[0], R_inverse[0], normal_triple)
     stop = time.time()
     last_time = stop - start
 
@@ -813,7 +838,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(asyncio.new_event_loop())
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
-    k = 320
+    k = 3
     try:
         # pp_elements = FakePreProcessedElements()
         # # k = 3 # How many of each kind of preproc
