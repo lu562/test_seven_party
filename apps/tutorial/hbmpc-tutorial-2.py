@@ -802,8 +802,8 @@ async def simple_matrix(ctx, **kwargs):
         M.append(matrix_a)
     start = time.time()
     # res = await batch_multi_matrices_multiply_with_precompute(ctx, M, R, R_inverse, super_triple, normal_triple)
-    # res = await state_of_art_power(ctx, matrix_a, p, normal_triple)
-    res = await matrix_power(ctx, matrix_a, p, R[0], R_inverse[0], normal_triple)
+    res = await state_of_art_power(ctx, matrix_a, p, normal_triple)
+    # res = await matrix_power(ctx, matrix_a, p, R[0], R_inverse[0], normal_triple)
     stop = time.time()
     last_time = stop - start
 
