@@ -221,15 +221,15 @@ if __name__ == "__main__":
     loop.set_debug(True)
     k = 1000
     try:
-        pp_elements = FakePreProcessedElements()
-        if HbmpcConfig.my_id == 0:
+#         pp_elements = FakePreProcessedElements()
+#         if HbmpcConfig.my_id == 0:
             
-            pp_elements.generate_zeros(20000, HbmpcConfig.N, HbmpcConfig.t)
-            pp_elements.generate_triples(260000, HbmpcConfig.N, HbmpcConfig.t)
-            pp_elements.generate_bits(20000, HbmpcConfig.N, HbmpcConfig.t)
-            pp_elements.preprocessing_done()
-        else:
-            loop.run_until_complete(pp_elements.wait_for_preprocessing())
+#             pp_elements.generate_zeros(20000, HbmpcConfig.N, HbmpcConfig.t)
+#             pp_elements.generate_triples(260000, HbmpcConfig.N, HbmpcConfig.t)
+#             pp_elements.generate_bits(20000, HbmpcConfig.N, HbmpcConfig.t)
+#             pp_elements.preprocessing_done()
+#         else:
+#             loop.run_until_complete(pp_elements.wait_for_preprocessing())
 
         loop.run_until_complete(
             _run(HbmpcConfig.peers, HbmpcConfig.N, HbmpcConfig.t, HbmpcConfig.my_id, k)
