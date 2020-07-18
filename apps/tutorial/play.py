@@ -162,7 +162,7 @@ async def run(ctx, **kwargs):
     logging.info("start evaluation")
     poly_results = await batch_decision_tree_eval(ctx, poly_terms, precompute_randoms, product)
     logging.info("evaluation finished")
-    middle = timt.time()
+    middle = time.time()
     for i in range(len(poly_results)):
         poly_results[i] = poly_results[i] * divisors[poly_id[i]]
     stop =  time.time()
