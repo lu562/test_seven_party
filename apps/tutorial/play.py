@@ -151,7 +151,7 @@ async def run(ctx, **kwargs):
     poly_terms = []
     poly_id = []
     for key,value in poly.items():
-        poly_id.append(int(key))
+        poly_id.append(key)
         terms = []
         for i in value[0]:
             terms.append(minus_one_terms[ids.index(int(i))])
