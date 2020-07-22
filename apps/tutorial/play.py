@@ -142,9 +142,12 @@ async def run(ctx, **kwargs):
     start =  time.time()
     for node_id, terms in comparison.items():
         ids.append(int(node_id))
-        virables.append(test_input[terms[0]] - FixedPoint(ctx,terms[1]))
+        virables.append(FixedPoint(ctx,terms[1]) - test_input[terms[0]])
 
     comparison_result = await batch_ltz(ctx, virables, rs, rs_msb)
+    for i in range(len(comparison_result)):
+        comparison_result[i] = (comparison_result[i] - Field(1)/Field(2)) * Field(2)
+      
     minus_one_terms = [ (i - Field(1)) for i in comparison_result]
     plus_one_terms = [ (i + Field(1)) for i in comparison_result]
 
