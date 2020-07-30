@@ -44,6 +44,7 @@ class NodeCommunicator(object):
 
     def send(self, node_id, msg):
         msg = (self.my_id, msg) if node_id == self.my_id else msg
+        await asyncio.sleep(0.1)
         self._sender_queues[node_id].put_nowait(msg)
 
     async def recv(self):
