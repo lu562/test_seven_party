@@ -74,6 +74,7 @@ async def batch_matrix_open(ctx, M):
                 array[m * k * c + i * k + j] = M[m][i][j]
     res = [[[0 for _ in range(c)] for _ in range(k)] for _ in range(len(M))]  
     start = time.time() 
+    await asyncio.sleep(0.1)
     open_array  = await ctx.ShareArray(array).open()
     stop = time.time() 
     total_communicate_time = total_communicate_time + stop - start
