@@ -136,7 +136,7 @@ async def run(ctx, **kwargs):
     precompute_randoms, product = decision_tree_offline(ctx, len(poly), len(poly[b][0]) + len(poly[b][1]) + 1)
 
     # online phase
-    test_input = [FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0),]
+    test_input = [FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0), FixedPoint(ctx,1), FixedPoint(ctx,0),FixedPoint(ctx,1),FixedPoint(ctx,1),FixedPoint(ctx,1),FixedPoint(ctx,1),FixedPoint(ctx,1)]
     virables = []
     ids = []
     start =  time.time()
@@ -171,28 +171,7 @@ async def run(ctx, **kwargs):
     stop =  time.time()
     logging.info(f"time for division: {stop - middle}")
     logging.info(f"total online time: {stop - start}")
-    # open_result = await ctx.ShareArray(poly_results).open() 
-    # print(open_result)
 
-
-
-
-    # logging.info("Starting _prog")
-    # a = FixedPoint(ctx, 99999999.5)
-    # b = FixedPoint(ctx, -3.8)
-    # A = await a.open()  # noqa: F841, N806
-    # B = await b.open()  # noqa: F841, N806
-    # AplusB = await (a + b).open()  # noqa: N806
-    # AminusB = await (a - b).open()  # noqa: N806
-    # AtimesB = await (await a.__mul__(b)).open()  # noqa: N806
-    # logging.info("Starting less than")
-    # # AltB = await (await a.lt(b)).open()  # noqa: N806
-    # # BltA = await (await b.lt(a)).open()  # noqa: N806
-    # AltB = await (await a.new_ltz()).open() 
-    # BltA = await (await b.new_ltz()).open() 
-    # logging.info("done")
-    # logging.info(f"A:{A} B:{B} A-B:{AminusB} A+B:{AplusB}")
-    # logging.info(f"A*B:{AtimesB} A<B:{AltB} B<A:{BltA}")
     logging.info("Finished _prog")
 
 
@@ -224,15 +203,15 @@ if __name__ == "__main__":
     loop.set_debug(True)
     k = 1000
     try:
-#         pp_elements = FakePreProcessedElements()
-#         if HbmpcConfig.my_id == 0:
+        # pp_elements = FakePreProcessedElements()
+        # if HbmpcConfig.my_id == 0:
             
-#             pp_elements.generate_zeros(20000, HbmpcConfig.N, HbmpcConfig.t)
-#             pp_elements.generate_triples(260000, HbmpcConfig.N, HbmpcConfig.t)
-#             pp_elements.generate_bits(20000, HbmpcConfig.N, HbmpcConfig.t)
-#             pp_elements.preprocessing_done()
-#         else:
-#             loop.run_until_complete(pp_elements.wait_for_preprocessing())
+        #     pp_elements.generate_zeros(20000, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.generate_triples(26000, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.generate_bits(20000, HbmpcConfig.N, HbmpcConfig.t)
+        #     pp_elements.preprocessing_done()
+        # else:
+        #     loop.run_until_complete(pp_elements.wait_for_preprocessing())
 
         loop.run_until_complete(
             _run(HbmpcConfig.peers, HbmpcConfig.N, HbmpcConfig.t, HbmpcConfig.my_id, k)
